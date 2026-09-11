@@ -413,6 +413,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check-compat.js"></script>
 </head>
 <body>
 <div id="auth-screen" style="display:none"></div>
@@ -434,6 +435,7 @@ const FIREBASE_CONFIG = {
 };
 window.PETERHOF_FIREBASE_CONFIG = FIREBASE_CONFIG;
 const FIREBASE_ENABLED = !!(window.firebase && !FIREBASE_CONFIG.apiKey.includes('YOUR_') && !FIREBASE_CONFIG.projectId.includes('YOUR_') && !FIREBASE_CONFIG.appId.includes('YOUR_'));
+const RECAPTCHA_ENTERPRISE_SITE_KEY = '6LdSVLYtAAAAAAMnbs4iN5CQTLIHJ9MTIYdHq1qN';
 let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDb = null;
@@ -1576,6 +1578,10 @@ async function init(){
   if(FIREBASE_ENABLED){
     try{
       firebaseApp=firebase.initializeApp(window.PETERHOF_FIREBASE_CONFIG);
+      if(window.firebase.appCheck){
+        const appCheck=firebase.appCheck();
+        appCheck.activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(RECAPTCHA_ENTERPRISE_SITE_KEY), true);
+      }
       firebaseAuth=firebase.auth();
       firebaseDb=firebase.firestore();
       firebaseAuth.onAuthStateChanged(async(user)=>{
