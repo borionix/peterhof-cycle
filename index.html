@@ -354,15 +354,7 @@
   .food-upload-btn input{ display:none; }
   .food-status{ font-family:'Roboto Mono',monospace; font-size:12px; color: var(--text-muted); }
   .food-status.error{ color: var(--down); }
-  .food-ai-card{margin-top:10px;padding:12px;border:1px solid var(--border);background:var(--surface2);border-radius:12px;}
-  .food-ai-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
-  .food-ai-title{font-weight:800;font-size:13px;}
-  .food-ai-total{font-family:'Roboto Mono',monospace;color:var(--accent);font-weight:700;font-size:12px;}
-  .food-ai-list{display:flex;flex-direction:column;gap:6px;}
-  .food-ai-item{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid rgba(56,32,39,.65);font-size:12px;}
   .food-ai-item:first-child{border-top:0;}
-  .food-ai-meta{font-family:'Roboto Mono',monospace;color:var(--text-muted);font-size:10px;text-align:right;white-space:nowrap;}
-  .food-ai-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
   .food-ai-note{margin-top:8px;color:var(--text-muted);font:10px 'Roboto Mono',monospace;line-height:1.5;}
   .food-rings-wrap{ display:flex; align-items:center; gap:24px; margin: 6px 0 4px 0; flex-wrap:wrap; }
   .food-ring-col{ flex: 0 0 auto; }
@@ -1459,45 +1451,6 @@ async function handleFoodSearch(){
     status.textContent='Найдено продуктов: '+items.length+'.';
   }catch(err){ status.textContent=err.message||'Ошибка поиска базы.'; status.classList.add('error'); }
 }
-async function processFoodPhoto(file){
-  const status=document.getElementById('food-status');
-  status.classList.remove('error'); status.textContent='Анализируем фото блюда…';
-  // Сначала пробуем штрихкод — это точнее для упакованных продуктов.
-  if('BarcodeDetector' in window){
-    try{
-      const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
-      const codes=await detector.detect(await createImageBitmap(file));
-      if(codes[0]?.rawValue){
-        status.textContent='Штрихкод найден. Ищем товар…';
-        const item=await getOpenFoodFactsByCode(codes[0].rawValue);
-        if(item){
-          const g=Number(prompt('Товар найден: '+item.name+'\nСколько граммов?', '100')); if(g){ await addFoodResult(addRemoteFoodResult(item,g)); renderFoodTab(); return; }
-        }
-      }
-    }catch(e){ /* BarcodeDetector может быть недоступен */ }
-  }
-  // Если это тарелка/миска/готовое блюдо без штрихкода — используем Gemini Vision.
-  if(typeof window.analyzeFoodPhotoAI==='function') {
-    try{ await window.analyzeFoodPhotoAI(file); return; }
-    catch(err){ status.textContent=err.message||'Не удалось распознать блюдо по фото.'; status.classList.add('error'); return; }
-  }
-  status.textContent='ИИ для анализа фото ещё не загрузился. Обнови страницу и попробуй ещё раз.';
-  status.classList.add('error');
-}
-function handleFoodTextSubmit(){
-  const input=document.getElementById('food-text-input'), btn=document.getElementById('food-text-btn'), status=document.getElementById('food-status'); const description=(input.value||'').trim(); if(!description)return;
-  btn.disabled=true; status.classList.remove('error'); status.textContent='Считаем КБЖУ…';
-  try{ const result=estimateFood(description); addFoodResult(result).then(()=>{input.value='';renderFoodTab();}); }catch(err){status.textContent=err.message||'Не удалось посчитать КБЖУ.';status.classList.add('error');btn.disabled=false;}
-}
-function handleFoodPhotoSelected(e){ const file=e.target.files&&e.target.files[0]; e.target.value=''; if(!file||!file.type.startsWith('image/'))return; processFoodPhoto(file); }
-
-function renderFoodStatistics(){
-  const content=document.getElementById('tab-content'), logs=state.nutrition&&state.nutrition.logs?state.nutrition.logs:{};
-  const days=Object.keys(logs).filter(k=>logs[k]&&logs[k].entries&&logs[k].entries.length).sort((a,b)=>b.localeCompare(a));
-  const html=days.length?days.map(key=>{const log=logs[key],totals=getTodayTotals(log),foods=log.entries.map(e=>`${escapeHtml(e.name||'Приём пищи')} <span class="mono">(${Math.round(e.calories)} ккал)</span>`).join('<br>');return `<div class="stat-day"><div class="stat-day-head"><span class="stat-date">${formatDateHuman(key)}</span><span class="stat-total">${Math.round(totals.calories)} ккал · Б ${Math.round(totals.protein)} · Ж ${Math.round(totals.fat)} · У ${Math.round(totals.carbs)}</span></div><div class="stat-food">${foods}</div></div>`;}).join(''):'<div class="stat-empty">Записей пока нет.</div>';
-  content.innerHTML=`<div class="panel"><div class="panel-title">Статистика питания</div><div class="food-subnav"><button class="food-subbtn" id="food-diary-btn">Дневник</button><button class="food-subbtn active">Статистика</button></div>${html}</div>`;
-  document.getElementById('food-diary-btn').addEventListener('click',()=>{foodSubTab='diary';renderFoodTab();});
-}
 function renderFoodTab(){
   if(foodSubTab==='stats'){renderFoodStatistics();return;}
   const content=document.getElementById('tab-content'),target=getDailyTarget(),log=getTodayLog(),totals=getTodayTotals(log);
@@ -1506,14 +1459,11 @@ function renderFoodTab(){
   content.innerHTML=`<div class="panel"><div class="panel-title">Дневник питания — ${formatDateHuman(getTodayKey())}</div><div class="food-subnav"><button class="food-subbtn active">Дневник</button><button class="food-subbtn" id="food-stats-btn">Статистика</button></div>
     <div class="food-search-row"><input type="text" id="food-search-input" placeholder="Найти любой продукт, блюдо или бренд…"><button class="food-text-btn" id="food-search-btn">Найти</button></div>
     <div id="food-search-results" class="food-search-results"></div>
-    <div class="food-upload-row"><label class="food-upload-btn">📷 Распознать блюдо по фото<input type="file" accept="image/*" capture="environment" id="food-photo-input"></label></div>
-    <div class="food-ai-note">Фото тарелки или миски анализируется ИИ: он определяет продукты, примерный вес порций и считает КБЖУ. Для блюда без упаковки это оценка, а не лабораторное измерение.</div>
+    <div class="food-ai-note">📷 Распознавание еды по фотографии временно отключено. Используй поиск продукта или введи еду текстом — сайт посчитает КБЖУ.</div>
     <div class="food-text-row"><input type="text" id="food-text-input" placeholder="Например: 80 г хлопьев и 200 мл молока"><button class="food-text-btn" id="food-text-btn">Добавить</button></div>
     <div class="food-status" id="food-status" style="margin-top:8px;"></div>
-    <div id="food-ai-result"></div>
   </div>${ringsBlock}<div class="panel"><div class="panel-title">Записи за сегодня</div><div class="food-entries">${entriesHtml}</div></div>`;
   document.getElementById('food-stats-btn').addEventListener('click',()=>{foodSubTab='stats';renderFoodTab();});
-  document.getElementById('food-photo-input').addEventListener('change',handleFoodPhotoSelected);
   document.getElementById('food-text-btn').addEventListener('click',handleFoodTextSubmit);
   document.getElementById('food-search-btn').addEventListener('click',handleFoodSearch);
   document.getElementById('food-search-input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();handleFoodSearch();}});
@@ -1605,140 +1555,6 @@ async function init(){
   await startApp();
 }
 init();
-</script>
-<script type="module">
-  // AI-анализ еды по фото через Firebase AI Logic + Gemini. SDK загружается только при первом фото.
-  let foodAiModelPromise=null;
-  let pendingAiFoodAnalysis=null;
-
-  async function getFoodAiModel(){
-    if(foodAiModelPromise) return foodAiModelPromise;
-    foodAiModelPromise=(async()=>{
-      const [{getApp,getApps,initializeApp},{initializeAppCheck,ReCaptchaEnterpriseProvider},{getAI,getGenerativeModel,GoogleAIBackend}]=await Promise.all([
-        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
-        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js'),
-        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js')
-      ]);
-      const app=getApps().length?getApp():initializeApp(FIREBASE_CONFIG);
-      // Initialize App Check through the same modular SDK used by Firebase AI Logic.
-      // This avoids stale/invalid compat tokens when AI Logic enforcement is enabled.
-      try{
-        initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(RECAPTCHA_ENTERPRISE_SITE_KEY),isTokenAutoRefreshEnabled:true});
-      }catch(e){
-        if(!String(e&&e.message||e).toLowerCase().includes('already')) throw e;
-      }
-      const ai=getAI(app,{backend:new GoogleAIBackend()});
-      const schema={
-        type:'object',
-        properties:{
-          dish_name:{type:'string'},
-          confidence:{type:'string',enum:['high','medium','low']},
-          items:{type:'array',items:{type:'object',properties:{
-            name:{type:'string'},
-            grams:{type:'number'},
-            kcal_per_100g:{type:'number'},
-            protein_per_100g:{type:'number'},
-            fat_per_100g:{type:'number'},
-            carbs_per_100g:{type:'number'},
-            calories:{type:'number'},
-            protein:{type:'number'},
-            fat:{type:'number'},
-            carbs:{type:'number'}
-          },required:['name','grams','kcal_per_100g','protein_per_100g','fat_per_100g','carbs_per_100g','calories','protein','fat','carbs']}},
-          total_calories:{type:'number'},
-          total_protein:{type:'number'},
-          total_fat:{type:'number'},
-          total_carbs:{type:'number'},
-          notes:{type:'string'}
-        },
-        required:['dish_name','confidence','items','total_calories','total_protein','total_fat','total_carbs','notes']
-      };
-      return getGenerativeModel(ai,{
-        model:'gemini-3.8-flash',
-        generationConfig:{responseMimeType:'application/json',responseSchema:schema}
-      });
-    })();
-    return foodAiModelPromise;
-  }
-
-  function fileToGenerativePart(file){
-    return new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onloadend=()=>{
-        try{resolve({inlineData:{data:String(reader.result).split(',')[1],mimeType:file.type||'image/jpeg'}});}catch(e){reject(e);}
-      };
-      reader.onerror=()=>reject(new Error('Не удалось прочитать фотографию.'));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function compressFoodPhoto(file){
-    const src=await createImageBitmap(file);
-    const maxSide=1600;
-    const scale=Math.min(1,maxSide/Math.max(src.width,src.height));
-    const canvas=document.createElement('canvas');
-    canvas.width=Math.max(1,Math.round(src.width*scale));
-    canvas.height=Math.max(1,Math.round(src.height*scale));
-    const ctx=canvas.getContext('2d');
-    ctx.drawImage(src,0,0,canvas.width,canvas.height);
-    src.close?.();
-    return await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.82));
-  }
-
-  function renderAiFoodAnalysis(data){
-    const box=document.getElementById('food-ai-result');
-    if(!box)return;
-    const items=Array.isArray(data.items)?data.items:[];
-    box.innerHTML=`<div class="food-ai-card">
-      <div class="food-ai-head"><div class="food-ai-title">${escapeHtml(data.dish_name||'Блюдо на фото')}</div><div class="food-ai-total">≈ ${Math.round(Number(data.total_calories)||0)} ккал</div></div>
-      <div class="food-ai-list">${items.map(x=>`<div class="food-ai-item"><span>${escapeHtml(x.name||'Продукт')}</span><span class="food-ai-meta">≈ ${Math.round(Number(x.grams)||0)} г · ${Math.round(Number(x.calories)||0)} ккал</span></div>`).join('')}</div>
-      <div class="food-ai-item"><b>Итого</b><span class="food-ai-meta">Б ${Math.round(Number(data.total_protein)||0)} г · Ж ${Math.round(Number(data.total_fat)||0)} г · У ${Math.round(Number(data.total_carbs)||0)} г</span></div>
-      <div class="food-ai-note">Уверенность: ${data.confidence==='high'?'высокая':data.confidence==='low'?'низкая':'средняя'}. ${escapeHtml(data.notes||'Вес и состав оценены по фотографии.')}</div>
-      <div class="food-ai-actions"><button type="button" class="food-text-btn" id="food-ai-add-btn">Добавить в дневник</button><button type="button" class="food-text-btn" id="food-ai-cancel-btn">Отмена</button></div>
-    </div>`;
-    document.getElementById('food-ai-add-btn').addEventListener('click',async()=>{
-      if(!pendingAiFoodAnalysis)return;
-      const d=pendingAiFoodAnalysis;
-      await addFoodResult({name:'📷 '+(d.dish_name||'Блюдо по фото'),calories:Number(d.total_calories)||0,protein:Number(d.total_protein)||0,fat:Number(d.total_fat)||0,carbs:Number(d.total_carbs)||0});
-      pendingAiFoodAnalysis=null;
-      renderFoodTab();
-    });
-    document.getElementById('food-ai-cancel-btn').addEventListener('click',()=>{pendingAiFoodAnalysis=null;box.innerHTML='';});
-  }
-
-  window.analyzeFoodPhotoAI=async function(file){
-    const status=document.getElementById('food-status');
-    const results=document.getElementById('food-search-results');
-    if(!status)return;
-    status.classList.remove('error');
-    status.textContent='Готовим фото для ИИ…';
-    if(!window.firebase){throw new Error('Firebase не загрузился. Обнови страницу.');}
-    const blob=await compressFoodPhoto(file);
-    const imagePart=await fileToGenerativePart(blob);
-    status.textContent='ИИ определяет продукты и размер порций…';
-    const model=await getFoodAiModel();
-    const prompt=`Ты — визуальный помощник по питанию. Проанализируй фотографию еды в тарелке, миске или контейнере.
-Определи ВСЕ заметные продукты и компоненты блюда. Не выдумывай невидимые ингредиенты.
-Для каждого компонента оцени массу порции в граммах по визуальному размеру, посуде и типичной плотности продукта.
-Затем оцени пищевую ценность на 100 г и рассчитай итоговые калории и БЖУ для видимой порции.
-Если на фото несколько блюд/компонентов, раздели их отдельно.
-Если точный вес по фото невозможен, всё равно дай наиболее разумную оценку и обязательно укажи это в notes.
-Не учитывай тарелку, миску, столовые приборы и упаковку как еду.
-Верни только JSON по заданной схеме.`;
-    const result=await Promise.race([
-      model.generateContent([prompt,imagePart]),
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error('ИИ отвечает слишком долго. Попробуй ещё раз через несколько секунд или сделай фото меньшего размера.')),45000))
-    ]);
-    let data;
-    try{data=JSON.parse(result.response.text());}catch(e){throw new Error('ИИ вернул некорректный результат. Попробуй сделать более чёткое фото блюда.');}
-    if(!data||!Array.isArray(data.items)||!data.items.length)throw new Error('Не удалось уверенно распознать еду на фото. Сделай фото сверху, чтобы вся тарелка или миска была видна.');
-    pendingAiFoodAnalysis=data;
-    if(results)results.innerHTML='';
-    const holder=document.getElementById('food-ai-result');
-    if(holder)holder.innerHTML='';
-    renderAiFoodAnalysis(data);
-    status.textContent='Готово. Проверь оценку и добавь её в дневник.';
-  };
 </script>
 </body>
 </html>
