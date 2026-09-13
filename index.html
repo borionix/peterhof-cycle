@@ -1614,20 +1614,14 @@ init();
   async function getFoodAiModel(){
     if(foodAiModelPromise) return foodAiModelPromise;
     foodAiModelPromise=(async()=>{
-      const [{getApp,getApps,initializeApp},{getAI,getGenerativeModel,GoogleAIBackend},{initializeAppCheck,ReCaptchaEnterpriseProvider}]=await Promise.all([
+      const [{getApp,getApps,initializeApp},{getAI,getGenerativeModel,GoogleAIBackend}]=await Promise.all([
         import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
-        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js'),
-        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js')
+        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js')
       ]);
       const app=getApps().length?getApp():initializeApp(FIREBASE_CONFIG);
-      try{
-        initializeAppCheck(app,{
-          provider:new ReCaptchaEnterpriseProvider(RECAPTCHA_ENTERPRISE_SITE_KEY),
-          isTokenAutoRefreshEnabled:true
-        });
-      }catch(appCheckError){
-        console.warn('App Check already initialized or unavailable:',appCheckError);
-      }
+      // App Check is initialized once by the Firebase compat bootstrap above.
+      // Do not initialize it a second time here: duplicate initialization can
+      // produce invalid tokens for Firebase AI Logic.
       const ai=getAI(app,{backend:new GoogleAIBackend()});
       const schema={
         type:'object',
@@ -1726,7 +1720,10 @@ init();
 Если точный вес по фото невозможен, всё равно дай наиболее разумную оценку и обязательно укажи это в notes.
 Не учитывай тарелку, миску, столовые приборы и упаковку как еду.
 Верни только JSON по заданной схеме.`;
-    const result=await model.generateContent([prompt,imagePart]);
+    const result=await Promise.race([
+      model.generateContent([prompt,imagePart]),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('ИИ отвечает слишком долго. Попробуй ещё раз через несколько секунд или сделай фото меньшего размера.')),45000))
+    ]);
     let data;
     try{data=JSON.parse(result.response.text());}catch(e){throw new Error('ИИ вернул некорректный результат. Попробуй сделать более чёткое фото блюда.');}
     if(!data||!Array.isArray(data.items)||!data.items.length)throw new Error('Не удалось уверенно распознать еду на фото. Сделай фото сверху, чтобы вся тарелка или миска была видна.');
