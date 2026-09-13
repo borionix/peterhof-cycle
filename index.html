@@ -230,7 +230,8 @@
   }
   .day-head .day-name{ font-size:16px; font-weight:700; text-transform:uppercase; letter-spacing:1px; }
   .day-head .day-focus{ font-size:12px; color: var(--text-muted); font-family:'Roboto Mono',monospace; }
-  .ex-row{
+  .deload-row{border-color:rgba(255,31,61,.55);background:rgba(255,31,61,.035)}
+.ex-row{
     display:flex; flex-direction:column; gap:10px;
     padding: 14px 18px; border-bottom: 1px solid var(--border);
   }
@@ -438,7 +439,8 @@ const TOTAL_WEEKS = 10;
 const MIN_REPS = 5;
 const FAILURE_THRESHOLD = 6;
 const NUM_SETS = 4;
-const FAILURE_WEEKS = [2, 4, 6, 8];
+const FAILURE_WEEKS = [2, 4, 8];
+const DELOAD_WEEK = 6;
 
 const DAY_DEFS = [
   { id:'mon', name:'ПОНЕДЕЛЬНИК', mainId:'bench', mainName:'Жим штанги лежа' },
@@ -507,16 +509,69 @@ function getMax(exId){
   return acc ? Number(acc.max) || 0 : 0;
 }
 
+const ACCESSORY_RANGES = {
+  acc_crossover: { min:10, max:15, step:0.025 },
+  acc_lateral: { min:12, max:20, step:0.025 },
+  acc_curl: { min:10, max:15, step:0.025 },
+  acc_rdl: { min:6, max:10, step:0.05 },
+  acc_goodmorning: { min:8, max:12, step:0.05 },
+  acc_dbbench: { min:8, max:12, step:0.025 },
+  acc_rowh: { min:8, max:12, step:0.025 },
+  acc_pullup: { min:6, max:10, step:0.05 },
+  acc_plate: { min:12, max:20, step:0.025 },
+  acc_shoulderpress: { min:8, max:12, step:0.025 },
+  acc_tricepext: { min:10, max:15, step:0.025 },
+  acc_pressdown: { min:10, max:15, step:0.025 }
+};
+
+function getAccessoryRange(exId){
+  return ACCESSORY_RANGES[exId] || { min:8, max:12, step:0.025 };
+}
+
+function accessoryProgressChange(exId, entry){
+  if(!entry || !Array.isArray(entry.sets)) return 0;
+  const range = getAccessoryRange(exId);
+  const reps = entry.sets.slice(0, NUM_SETS).map(Number).filter(Number.isFinite);
+  if(reps.length < NUM_SETS) return 0;
+  if(reps.some(r => r < range.min)) return -range.step;
+  if(reps.every(r => r >= range.max)) return range.step;
+  return 0;
+}
+
 function computeWeights(exId){
   const max = getMax(exId);
   const logs = (state.logs[exId]) || {};
   const weights = {};
+  const ex = getAllExercises().find(item => item.id === exId);
+  const isAccessory = ex && !ex.isMain;
   let w = roundWeight(max * 0.9);
   weights[1] = w;
   for(let wk=2; wk<=TOTAL_WEEKS; wk++){
+    if(wk === DELOAD_WEEK){
+      w = roundWeight(weights[wk-1] * 0.85);
+      weights[wk] = w;
+      continue;
+    }
+    if(wk === DELOAD_WEEK + 1){
+      const beforeDeload = weights[DELOAD_WEEK-1];
+      if(isAccessory){
+        const change = accessoryProgressChange(exId, logs[DELOAD_WEEK-1]);
+        w = roundWeight(beforeDeload * (1 + change));
+      }else{
+        const beforeEntry = logs[DELOAD_WEEK-1];
+        const beforeFailure = beforeEntry ? beforeEntry.failure : '';
+        w = roundWeight(beforeDeload * (1 + pctChange(beforeFailure)));
+      }
+      weights[wk] = w;
+      continue;
+    }
     const prevEntry = logs[wk-1];
-    const prevFailure = prevEntry ? prevEntry.failure : '';
-    w = roundWeight(w * (1 + pctChange(prevFailure)));
+    if(isAccessory){
+      w = roundWeight(w * (1 + accessoryProgressChange(exId, prevEntry)));
+    }else{
+      const prevFailure = prevEntry ? prevEntry.failure : '';
+      w = roundWeight(w * (1 + pctChange(prevFailure)));
+    }
     weights[wk] = w;
   }
   return weights;
@@ -779,10 +834,13 @@ function renderProgramTab(){
       const max = getMax(ex.id);
       const pct = max ? Math.min(100, Math.round((w/max)*100)) : 0;
       const entry = getLogEntry(ex.id, week);
-      const isFailureWeek = ex.isMain ? FAILURE_WEEKS.includes(week) : true;
+      const isDeloadWeek = week === DELOAD_WEEK;
+      const isFailureWeek = !isDeloadWeek && (ex.isMain ? FAILURE_WEEKS.includes(week) : false);
+      const accessoryRange = !ex.isMain ? getAccessoryRange(ex.id) : null;
       const delta = deltaLabel(entry.failure);
       const nextWeekExists = week < TOTAL_WEEKS;
-      const setInputs = entry.sets.map((val, i) => `
+      const visibleSets = isDeloadWeek ? 2 : NUM_SETS;
+      const setInputs = entry.sets.slice(0, visibleSets).map((val, i) => `
         <div class="set-mini">
           <label>${i+1}</label>
           <input type="number" class="reps-input set-input" min="0" max="30" data-set-idx="${i}" placeholder="—" value="${val}">
@@ -795,9 +853,9 @@ function renderProgramTab(){
             </div>` : '';
       const deltaText = isFailureWeek ? (nextWeekExists ? (delta ? delta.text : 'мин. 5') : '—') : '—';
       return `
-        <div class="ex-row ${ex.isMain?'main-ex':''}" data-exid="${ex.id}">
+        <div class="ex-row ${ex.isMain?'main-ex':''} ${isDeloadWeek?'deload-row':''}" data-exid="${ex.id}">
           <div class="ex-top">
-            <div class="ex-name">${escapeHtml(ex.name)}<span class="max-tag">максимум: ${max || '—'} кг</span></div>
+            <div class="ex-name">${escapeHtml(ex.name)}<span class="max-tag">максимум: ${max || '—'} кг</span>${accessoryRange ? `<span class="max-tag">${accessoryRange.min}–${accessoryRange.max} повторений · вес + только после всех подходов</span>` : ''}</div>
             <div class="ex-right">
               <div class="weight-box">
                 <div class="kg mono">${w}<span class="unit"> кг</span></div>
@@ -826,10 +884,12 @@ function renderProgramTab(){
 
   content.innerHTML = `
     <div class="week-nav">${weekPills}</div>
+    ${week === DELOAD_WEEK ? `<div class="legend" style="border-color:var(--accent);color:var(--text)"><b>РАЗГРУЗОЧНАЯ НЕДЕЛЯ</b><br>Сделай только 2 лёгких рабочих подхода, без подхода на максимум и без отказа. Вес автоматически снижен примерно на 15%. Цель — восстановиться и сохранить технику.</div>` : ''}
+    ${week === DELOAD_WEEK + 1 ? `<div class="legend" style="border-color:var(--accent);color:var(--text)"><b>ВОЗВРАЩЕНИЕ ПОСЛЕ РАЗГРУЗКИ</b><br>Возвращаемся к расчётному весу до разгрузки. Не гонись за отказом: оставь 2–3 повтора в запасе.</div>` : ''}
     ${dayCards}
     ${week === TOTAL_WEEKS ? retestPanelHtml() : ''}
     <div class="legend">
-      4 рабочих подхода — только для записи. Пятый — <b>подход на максимум</b>, который определяет вес следующей недели: нужно сделать минимум 5 повторений, иначе вес снижается (−2% / −5%). Больше 6 повторений — вес растёт: +0.5% (7), +1% (8), +1.5% (9), +2% (10), +3% (11 и более). В основных упражнениях он бывает на неделях 2, 4, 6, 8; в дополнительных — каждую неделю.
+      Обычная неделя: 4 рабочих подхода. Для дополнительных упражнений работает двойная прогрессия: сначала добавляй повторения в своём диапазоне, а вес увеличивается только когда все 4 подхода достигли верхней границы. Если минимум не достигнут — вес немного снижается. Контрольный подход появляется по расписанию и меняет вес следующей недели. На 6-й неделе — разгрузка: 2 подхода, вес −15%, без максимума. На 7-й неделе вес возвращается к расчётному уровню до разгрузки. Если не выполнил минимум 5 повторений — вес снижается; если сделал больше 6 — постепенно растёт.
     </div>
     <div class="footer-note">Данные сохраняются автоматически в этом браузере.</div>
   `;
