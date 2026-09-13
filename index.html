@@ -1614,14 +1614,19 @@ init();
   async function getFoodAiModel(){
     if(foodAiModelPromise) return foodAiModelPromise;
     foodAiModelPromise=(async()=>{
-      const [{getApp,getApps,initializeApp},{getAI,getGenerativeModel,GoogleAIBackend}]=await Promise.all([
+      const [{getApp,getApps,initializeApp},{initializeAppCheck,ReCaptchaEnterpriseProvider},{getAI,getGenerativeModel,GoogleAIBackend}]=await Promise.all([
         import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app-check.js'),
         import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js')
       ]);
       const app=getApps().length?getApp():initializeApp(FIREBASE_CONFIG);
-      // App Check is initialized once by the Firebase compat bootstrap above.
-      // Do not initialize it a second time here: duplicate initialization can
-      // produce invalid tokens for Firebase AI Logic.
+      // Initialize App Check through the same modular SDK used by Firebase AI Logic.
+      // This avoids stale/invalid compat tokens when AI Logic enforcement is enabled.
+      try{
+        initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(RECAPTCHA_ENTERPRISE_SITE_KEY),isTokenAutoRefreshEnabled:true});
+      }catch(e){
+        if(!String(e&&e.message||e).toLowerCase().includes('already')) throw e;
+      }
       const ai=getAI(app,{backend:new GoogleAIBackend()});
       const schema={
         type:'object',
@@ -1649,7 +1654,7 @@ init();
         required:['dish_name','confidence','items','total_calories','total_protein','total_fat','total_carbs','notes']
       };
       return getGenerativeModel(ai,{
-        model:'gemini-3.7-flash',
+        model:'gemini-3.8-flash',
         generationConfig:{responseMimeType:'application/json',responseSchema:schema}
       });
     })();
