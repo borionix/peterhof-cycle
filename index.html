@@ -737,7 +737,6 @@ function renderSetupTab(){
       <div class="panel-title">Дополнительные упражнения — мой максимум</div>
       <div id="acc-list">${accRows}</div>
       <button class="add-row-btn" id="add-acc-btn">+ Добавить упражнение</button>
-      <div class="hint">Оставьте поле «кг» пустым, чтобы упражнение не включалось в план цикла.</div>
     </div>
 
     <button class="primary-btn" id="save-btn">Сохранить и перейти к циклу →</button>
@@ -781,7 +780,6 @@ function retestPanelHtml(){
         <div class="field"><label>Присед со штангой, кг</label><input type="number" id="retest-squat" min="0" step="0.5" placeholder="${s.maxes.squat || '—'}"></div>
       </div>
       <button class="primary-btn" id="restart-cycle-btn">Начать новый цикл →</button>
-      <div class="hint">Пустое поле = максимум в этом упражнении остаётся прежним. Прогресс всех недель обнулится, вес недели 1 нового цикла пересчитается как 90% от нового максимума.</div>
     </div>
   `;
 }
@@ -855,7 +853,7 @@ function renderProgramTab(){
       return `
         <div class="ex-row ${ex.isMain?'main-ex':''} ${isDeloadWeek?'deload-row':''}" data-exid="${ex.id}">
           <div class="ex-top">
-            <div class="ex-name">${escapeHtml(ex.name)}<span class="max-tag">максимум: ${max || '—'} кг</span>${accessoryRange ? `<span class="max-tag">${accessoryRange.min}–${accessoryRange.max} повторений · вес + только после всех подходов</span>` : ''}</div>
+            <div class="ex-name">${escapeHtml(ex.name)}<span class="max-tag">максимум: ${max || '—'} кг</span></div>
             <div class="ex-right">
               <div class="weight-box">
                 <div class="kg mono">${w}<span class="unit"> кг</span></div>
@@ -884,14 +882,8 @@ function renderProgramTab(){
 
   content.innerHTML = `
     <div class="week-nav">${weekPills}</div>
-    ${week === DELOAD_WEEK ? `<div class="legend" style="border-color:var(--accent);color:var(--text)"><b>РАЗГРУЗОЧНАЯ НЕДЕЛЯ</b><br>Сделай только 2 лёгких рабочих подхода, без подхода на максимум и без отказа. Вес автоматически снижен примерно на 15%. Цель — восстановиться и сохранить технику.</div>` : ''}
-    ${week === DELOAD_WEEK + 1 ? `<div class="legend" style="border-color:var(--accent);color:var(--text)"><b>ВОЗВРАЩЕНИЕ ПОСЛЕ РАЗГРУЗКИ</b><br>Возвращаемся к расчётному весу до разгрузки. Не гонись за отказом: оставь 2–3 повтора в запасе.</div>` : ''}
     ${dayCards}
     ${week === TOTAL_WEEKS ? retestPanelHtml() : ''}
-    <div class="legend">
-      Обычная неделя: 4 рабочих подхода. Для дополнительных упражнений работает двойная прогрессия: сначала добавляй повторения в своём диапазоне, а вес увеличивается только когда все 4 подхода достигли верхней границы. Если минимум не достигнут — вес немного снижается. Контрольный подход появляется по расписанию и меняет вес следующей недели. На 6-й неделе — разгрузка: 2 подхода, вес −15%, без максимума. На 7-й неделе вес возвращается к расчётному уровню до разгрузки. Если не выполнил минимум 5 повторений — вес снижается; если сделал больше 6 — постепенно растёт.
-    </div>
-    <div class="footer-note">Данные сохраняются автоматически в этом браузере.</div>
   `;
 
   document.querySelectorAll('.week-pill').forEach(btn => {
@@ -1101,7 +1093,6 @@ function renderKbjuTab(){
             <button type="button" data-step-target="kbju-target-weight" data-step-dir="-0.5">▼</button>
           </div>
         </div>
-        <div class="hint">Вес, до которого хотите дойти.</div>
       </div>
 
       <div class="field" style="margin-top:20px;">
@@ -1203,7 +1194,7 @@ function renderKbjuResult(){
     if(dailyDelta > 20){
       const weeks = Math.max(1, Math.round((range.gapKg * 7700) / (dailyDelta * 7)));
       const verb = k.goal === 'cut' ? 'сбросить' : 'набрать';
-      etaHint = `<div class="hint">При такой калорийности — примерно ${weeks} нед. чтобы ${verb} ${range.gapKg.toFixed(1)} кг до целевого веса ${k.targetWeight} кг.</div>`;
+      etaHint = ``;
     }
   }
 
@@ -1219,7 +1210,6 @@ function renderKbjuResult(){
         <div class="kbju-macro"><span>Жиры</span><b>${Math.round(macros.fatG)} г</b><small>${Math.round(macros.fatKcal)} ккал</small></div>
         <div class="kbju-macro"><span>Углеводы</span><b>${Math.round(macros.carbsG)} г</b><small>${Math.round(macros.carbsKcal)} ккал</small></div>
       </div>
-      <div class="hint">Расчёт БЖУ сделан по среднему значению из диапазона калорий — ${mid} ккал/день.</div>
       ${etaHint}
     </div>
   `;
